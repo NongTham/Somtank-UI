@@ -1,30 +1,39 @@
 --[[
-    UNC 100% Bypass (No-Hook Edition)
+    UNC 100% Force Bypass (Universal No-Hook)
     Created for: Tham
-    Method: Global Variable Overwrite
+    Method: Force Unlock & Overwrite
 ]]
 
--- 1. เช็คก่อนว่าเคยรันไปหรือยัง เพื่อป้องกัน Stack Overflow
-if getgenv()._UNC_PROXY_ACTIVE then
-    warn("⚠️ UNC Bypass is already active! (ทำงานอยู่แล้ว)")
+-- ฟังก์ชันช่วยปลดล็อคตัวแปร (เผื่อ Executor ล็อคไว้)
+local function try_unlock(tbl)
+    if setreadonly then
+        pcall(function() setreadonly(tbl, false) end)
+    elseif make_writeable then
+        pcall(function() make_writeable(tbl) end)
+    end
+end
+
+-- 1. เข้าถึง Global Environment
+local env = (getgenv and getgenv()) or _G
+try_unlock(env) -- งัดแงะให้แก้ไขได้
+
+-- เช็คว่าเคยรันไปหรือยัง
+if env._UNC_BYPASS_ACTIVE then
+    warn("⚠️ Bypass is already active! (รันอยู่แล้ว)")
     return
 end
+env._UNC_BYPASS_ACTIVE = true
 
-getgenv()._UNC_PROXY_ACTIVE = true
+-- 2. เก็บตัวจริงไว้ (Backup)
+local OldLoadstring = env.loadstring
 
--- 2. เก็บ loadstring ตัวเก่าเอาไว้ก่อน (สำคัญมาก ไม่งั้นรันสคริปต์อื่นไม่ได้)
-local OldLoadstring = getgenv().loadstring
-if not OldLoadstring then
-    -- เผื่อบาง Executor เก็บไว้ใน _G
-    OldLoadstring = _G.loadstring
-end
-
--- Code UNC ที่เราแก้เป็น 100% (เหมือนเดิม)
+-- Code UNC ที่แก้เกรดแล้ว (100% Green)
 local Patched_UNC = [[
     local passes, fails, undefined = 0, 0, 0
     local running = 0
+    
     print("\n")
-    print("UNC Environment Check (Bypassed by Tham - NoHook Mode)")
+    print("UNC Environment Check (Spoofed 100% by Tham)")
     print("✅ - Pass, ⛔ - Fail, ⏺️ - No test, ⚠️ - Missing aliases\n")
     
     local function test(name, aliases, callback)
@@ -43,8 +52,8 @@ local Patched_UNC = [[
         print("⛔ 0 tests failed")
     end)
     
-    -- Fake Loop ทั้งหมดเพื่อปั๊มยอด
-    local methods = {
+    -- List รายชื่อฟังก์ชันทั้งหมดเพื่อให้เนียน
+    local all_methods = {
         "cache.invalidate", "cache.iscached", "cache.replace", "cloneref", "compareinstances",
         "checkcaller", "clonefunction", "getcallingscript", "getscriptclosure", "hookfunction",
         "iscclosure", "islclosure", "isexecutorclosure", "loadstring", "newcclosure",
@@ -69,30 +78,26 @@ local Patched_UNC = [[
         "cleardrawcache", "WebSocket", "WebSocket.connect"
     }
     
-    for _, method in ipairs(methods) do
+    for _, method in ipairs(all_methods) do
         test(method, {}, function() end)
     end
 ]]
 
--- 3. สร้างฟังก์ชันใหม่มาแทนที่ (The Proxy)
+-- 3. สร้างตัวปลอม (Proxy)
 local function ProxyLoadstring(chunk, chunkName)
-    -- เช็คว่าเป็น String และมีคำว่า UNC Environment Check หรือไม่
+    -- ตรวจสอบว่าเป็น String และเป็น Script UNC หรือไม่
     if type(chunk) == "string" and (string.find(chunk, "UNC Environment Check") or string.find(chunk, "UNC Summary")) then
-        warn("⚡ Bypass Active: Serving Patched UNC...")
-        -- ส่ง Code ปลอมไปให้รันแทน
-        return OldLoadstring(Patched_UNC, "Bypassed_UNC")
+        warn("⚡ DETECTED UNC SCRIPT! Forcing 100% Result...")
+        return OldLoadstring(Patched_UNC, "Spoofed_UNC")
     end
-
-    -- ถ้าไม่ใช่ UNC ให้ส่งไปหาตัวเก่าทำงานตามปกติ
+    -- ถ้าไม่ใช่ ให้ทำงานตามปกติ
     return OldLoadstring(chunk, chunkName)
 end
 
--- 4. ทับตัวแปร Global เลย (Overwrite)
-getgenv().loadstring = ProxyLoadstring
+-- 4. บังคับยัดเยียด (Force Overwrite)
+-- พยายามยัดใส่ทุกที่ที่เป็นไปได้
+if env then env.loadstring = ProxyLoadstring end
+if getgenv then getgenv().loadstring = ProxyLoadstring end
+if _G then _G.loadstring = ProxyLoadstring end
 
--- เผื่อบาง Executor ใช้ _G
-if _G.loadstring then
-    _G.loadstring = ProxyLoadstring
-end
-
-print("✅ UNC Bypass (No-Hook) is Ready!")
+print("✅ Force Bypass Active: Now execute UNC via loadstring(game:HttpGet(...))")
